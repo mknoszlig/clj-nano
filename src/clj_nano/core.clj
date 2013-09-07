@@ -7,11 +7,6 @@
 
 (defonce ^NanoLibrary inst (NanoLibrary.))
 
-(def transports
-  {:inproc (. inst NN_INPROC)
-   :ipc    (. inst NN_IPC)
-   :tcp    (. inst NN_TCP)})
-
 (def domains
   {:af-sp (. inst AF_SP)
    :af-sp-raw (. inst AF_SP_RAW)})
@@ -31,16 +26,21 @@
    :bus        (. inst NN_BUS)})
 
 (defn- non-neg? [value] (not (neg? value)))
-
-(comment
-  (defmacro assert-non-neg [val fn-name]
-    `(assert (non-neg? ~val)
-             (format "error in %s: %s\n"
-                     ~(name fn-name)
-                     (. inst nn_strerror
-                        (. inst nn_errno))))))
-
+(def byte-array-type (Class/forName "[B"))
 (def version (. inst get_version))
+
+(defprotocol ByteBufferable
+  (byte-buffer [this]))
+
+(extend-type ByteBuffer
+  ByteBufferable
+  (byte-buffer [this] this))
+
+(extend-type (Class/forName "[B")
+  ByteBufferable
+  (byte-buffer [this]
+    (let [bb (ByteBuffer/allocateDirect (count this))]
+      (.put bb ^bytes this))))
 
 (defprotocol Closeable
   (close [this]))
@@ -64,10 +64,6 @@
                                                      (. inst nn_errno))))
        (->Socket domain type ptr))))
 
-(defn byte-buffer [^bytes value]
-  (let [bb (ByteBuffer/allocateDirect (count value))]
-    (.put bb value)))
-
 (defn bind [^Socket socket ^String address]
   (let [rc (. inst nn_bind (:ptr socket) address)]
     (assert (non-neg? rc)
@@ -77,29 +73,34 @@
   socket)
 
 (defn connect [^Socket socket ^String address]
-  (let [rc (. inst nn_connect (get socket :ptr) address)]
+  (let [rc (. inst nn_connect (:ptr socket) address)]
     (assert (non-neg? rc)
             (format "error in nn_connect: %s\n"
                     (. inst nn_strerror
                        (. inst nn_errno)))))
   socket)
 
-(defn send [^Socket socket ^bytes msg]
-  (let [bb (byte-buffer msg)
-        rc (. inst nn_send (get socket :ptr) bb 0 (count msg) 0)]
+(defn send [^Socket socket msg msg-size]
+  (let [bb (byte-buffer ^ByteBufferable msg)
+        rc (. inst nn_send (:ptr socket) bb 0 msg-size 0)]
     (assert (non-neg? rc)
             (format "error in nn_send: %s\n" (. inst nn_strerror
                                                 (. inst nn_errno))))))
 
-(defn receive [^Socket socket message-size]
-  (let [bb (ByteBuffer/allocateDirect message-size)
-        rc (. inst nn_recv (get socket :ptr) bb 0 message-size 0)
-        ret (byte-array message-size)]
-    (assert (non-neg? rc)
-            (format "error in nn_receive: %s\n"
-                    (. inst nn_strerror
-                       (. inst nn_errno))))
-    (assert (= message-size rc)
-            (format "message of incorrect size received\n"))
-    (. bb get ret)
-    ret))
+(defn receive
+  ([^Socket socket message-size]
+     (let [ret (byte-array message-size)
+           buf (ByteBuffer/allocateDirect message-size)]
+       (receive socket buf message-size)
+       (.get buf ret)
+       ret))
+  ([^Socket socket ^ByteBuffer buffer message-size]
+     (let [rc (. inst nn_recv (:ptr socket) buffer 0 message-size 0)]
+       (assert (non-neg? rc)
+               (format "error in nn_receive: %s\n"
+                       (. inst nn_strerror
+                          (. inst nn_errno))))
+       (assert (= message-size rc)
+               (format "message of incorrect size received\n"))
+
+       buffer)))
