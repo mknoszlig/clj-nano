@@ -8,8 +8,23 @@
 (defonce ^NanoLibrary inst (NanoLibrary.))
 
 (def domains
-  {:af-sp (. inst AF_SP)
+  {:af-sp     (. inst AF_SP)
    :af-sp-raw (. inst AF_SP_RAW)})
+
+(def opt-levels
+  {:socket (. inst NN_SOL_SOCKET)
+   :tcp    (. inst NN_TCP)})
+
+(def options
+  {:nodelay           (. inst NN_TCP_NODELAY)
+   :linger            (. inst NN_LINGER)
+   :send-buffer       (. inst NN_SNDBUF)
+   :receive-buffer    (. inst NN_RCVBUF)
+   :send-timeout      (. inst NN_SNDTIMEO)
+   :receive-timeout   (. inst NN_RCVTIMEO)
+   :reconnect-ivl     (. inst NN_RECONNECT_IVL)
+   :reconnect-ivl-max (. inst NN_RECONNECT_IVL_MAX)
+   :send-priority     (. inst NN_SNDPRIO)})
 
 (def socket-types
   {:pair       (. inst NN_PAIR)
@@ -26,7 +41,6 @@
    :bus        (. inst NN_BUS)})
 
 (defn- non-neg? [value] (not (neg? value)))
-(def byte-array-type (Class/forName "[B"))
 (def version (. inst get_version))
 
 (defprotocol ByteBufferable
@@ -51,7 +65,7 @@
     (let [ret (. inst nn_close ptr)]
       (assert (non-neg? ret)
               (let [err-no (. inst nn_errno)]
-                (format "Error %d - %s\n"
+                (format "Error %d - %s"
                         err-no
                         (. inst nn_strerror err-no)))))))
 
@@ -60,14 +74,21 @@
   ([type domain]
      (let [ptr (. inst nn_socket (domains domain) (socket-types type))]
        (assert (non-neg? ptr)
-               (format "error in nn_socket: %s\n" (. inst nn_strerror
-                                                     (. inst nn_errno))))
+               (format "error in nn_socket: %s" (. inst nn_strerror
+                                                   (. inst nn_errno))))
        (->Socket domain type ptr))))
+
+(defn set-int-option
+  ([^Socket socket option ^Integer value]
+     (set-int-option  socket (opt-levels :socket) option ^Integer value))
+  ([^Socket socket level option value]
+     (. inst nn_setsockopt_int (:ptr socket) (opt-levels level) (options option) value)
+     socket))
 
 (defn bind [^Socket socket ^String address]
   (let [rc (. inst nn_bind (:ptr socket) address)]
     (assert (non-neg? rc)
-            (format "error in nn_bind: %s\n"
+            (format "error in nn_bind: %s"
                     (. inst nn_strerror
                        (. inst nn_errno)))))
   socket)
@@ -75,7 +96,7 @@
 (defn connect [^Socket socket ^String address]
   (let [rc (. inst nn_connect (:ptr socket) address)]
     (assert (non-neg? rc)
-            (format "error in nn_connect: %s\n"
+            (format "error in nn_connect: %s"
                     (. inst nn_strerror
                        (. inst nn_errno)))))
   socket)
@@ -84,8 +105,8 @@
   (let [bb (byte-buffer ^ByteBufferable msg)
         rc (. inst nn_send (:ptr socket) bb 0 msg-size 0)]
     (assert (non-neg? rc)
-            (format "error in nn_send: %s\n" (. inst nn_strerror
-                                                (. inst nn_errno))))))
+            (format "error in nn_send: %s" (. inst nn_strerror
+                                              (. inst nn_errno))))))
 
 (defn receive
   ([^Socket socket message-size]
@@ -97,10 +118,10 @@
   ([^Socket socket ^ByteBuffer buffer message-size]
      (let [rc (. inst nn_recv (:ptr socket) buffer 0 message-size 0)]
        (assert (non-neg? rc)
-               (format "error in nn_receive: %s\n"
+               (format "error in nn_receive: %s"
                        (. inst nn_strerror
                           (. inst nn_errno))))
        (assert (= message-size rc)
-               (format "message of incorrect size received\n"))
+               (format "message of incorrect size received."))
 
        buffer)))
