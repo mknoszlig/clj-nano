@@ -24,11 +24,11 @@ FIXME
 
 ## Known Limitations
 
-- no variable message size atm, since it is not supported by jnano yet.
+- no variable message size. (no jnano support)
+- only supports setting of int socket options. (no jnano support)
 
 ## License
 
-Copyright © 2013 FIXME
+Copyright © 2013 Maximilian Karasz
 
-Distributed under the Eclipse Public License either version 1.0 or (at
-your option) any later version.
+Distributed under the MIT/X11 License, same as nanomsg.
