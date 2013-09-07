@@ -10,13 +10,16 @@ A thin wrapper around the [jnano][2] library.
 ## Installing
 
 1. Install libnanomsg. (see https://github.com/nanomsg/nanomsg)
+
 2. Install jnano (https://github.com/gonzus/jnano)
+
 3. add jnano-0.1 jar to local maven repo:
-   
+
    ```shell
    mvn install:install-file -Dfile=build/java/jar/jnano-0.1.jar -DgroupId=nanomsg \
     -DartifactId=jnano -Dversion=0.1 -Dpackaging=jar
    ```
+   
 4. edit project.clj :jvm-opts to include the location of the jnano
    c lib (/path/to/jnano/build/c/sharedlibrary).
 
